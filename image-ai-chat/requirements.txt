@@ -1,0 +1,21 @@
+# ──────────────────────────────────────────────────────────
+# Image AI Chat — Python dependencies
+# Install with:  pip install -r requirements.txt
+# ──────────────────────────────────────────────────────────
+
+# Web framework
+flask>=2.3.0
+
+# Deep-learning + model hub
+torch>=2.0.0          # CPU build is fine; no CUDA required
+transformers>=4.35.0  # BLIP captioning + VQA
+sentencepiece>=0.1.99 # tokenizer dependency for some HF models
+accelerate>=0.24.0    # optional speed-ups even on CPU
+
+# Image handling
+Pillow>=10.0.0
+opencv-python-headless>=4.8.0  # headless (no GUI) — lighter weight
+
+# Utilities
+numpy>=1.24.0
+requests>=2.31.0      # used internally by transformers for model download

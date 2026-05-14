@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision Chat — AI Image Analysis</title>
+
+  <!-- Google Fonts: Syne (display) + DM Sans (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ════════════════════════════════════════════════════
+       CSS VARIABLES — dark, rich editorial palette
+    ════════════════════════════════════════════════════ */
+    :root {
+      --bg:          #0d0d0f;
+      --surface:     #141418;
+      --surface-2:   #1c1c22;
+      --border:      #2a2a33;
+      --border-light:#38383f;
+      --accent:      #c8f060;     /* electric lime */
+      --accent-dim:  #9ab840;
+      --accent-glow: rgba(200,240,96,.15);
+      --mic-color:   #f06060;     /* red for mic */
+      --mic-glow:    rgba(240,96,96,.20);
+      --speak-color: #60c8f0;    /* blue for speaker */
+      --text:        #e8e8ed;
+      --text-muted:  #7a7a8a;
+      --text-subtle: #4a4a58;
+      --user-bubble: #1f2937;
+      --ai-bubble:   #171c14;
+      --error:       #ff5e5e;
+      --radius-sm:   6px;
+      --radius-md:   12px;
+      --radius-lg:   20px;
+      --font-display: 'Syne', sans-serif;
+      --font-body:    'DM Sans', sans-serif;
+    }
+
+    /* ════════════════════════════════════════════════════
+       RESET + BASE
+    ════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ════════════════════════════════════════════════════
+       LAYOUT
+    ════════════════════════════════════════════════════ */
+    .shell {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      grid-template-rows: 100vh;
+      height: 100vh;
+    }
+
+    /* ── Left panel ─────────────────────────────────── */
+    .panel-left {
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 28px 28px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .logo-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    /* ── Feature badges ─────────────────────────────── */
+    .feature-badges {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      border: 1px solid;
+    }
+
+    .badge-tts {
+      background: rgba(96,200,240,.1);
+      border-color: rgba(96,200,240,.3);
+      color: var(--speak-color);
+    }
+
+    .badge-stt {
+      background: rgba(240,96,96,.1);
+      border-color: rgba(240,96,96,.3);
+      color: var(--mic-color);
+    }
+
+    /* ── Drop zone ─────────────────────────────────── */
+    .drop-zone-wrapper {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .drop-zone {
+      position: relative;
+      border: 2px dashed var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 36px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      background: var(--surface-2);
+      flex-shrink: 0;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragging {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer;
+      width: 100%; height: 100%;
+    }
+
+    .drop-icon { font-size: 36px; margin-bottom: 10px; display: block; }
+
+    .drop-title {
+      font-family: var(--font-display);
+      font-size: 15px; font-weight: 600;
+      color: var(--text); margin-bottom: 4px;
+    }
+
+    .drop-hint { font-size: 12px; color: var(--text-muted); }
+
+    .btn-upload {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding: 9px 20px;
+      background: var(--accent);
+      color: #0d0d0f;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 13px;
+      border: none;
+      border-radius: 99px;
+      cursor: pointer;
+      transition: background .15s;
+      pointer-events: none;
+    }
+
+    .drop-zone:hover .btn-upload { background: #d9f57a; }
+
+    /* ── Processing overlay ─────────────────────────── */
+    #processing-overlay {
+      display: none;
+      position: absolute; inset: 0;
+      background: rgba(13,13,15,.85);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      border-radius: var(--radius-lg);
+    }
+
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .processing-text {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font-display);
+      font-weight: 600;
+    }
+
+    /* ── Image preview card ─────────────────────────── */
+    #preview-card {
+      display: none;
+      background: var(--surface-2);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+      animation: fadeUp .4s ease;
+    }
+
+    #preview-card img {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .caption-bar { padding: 14px 16px; }
+
+    .caption-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Speak-caption button ───────────────────────── */
+    .speak-caption-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      background: rgba(96,200,240,.12);
+      border: 1px solid rgba(96,200,240,.3);
+      border-radius: 99px;
+      color: var(--speak-color);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      margin-left: auto;
+    }
+
+    .speak-caption-btn:hover { background: rgba(96,200,240,.22); }
+    .speak-caption-btn.speaking { animation: pulse-blue 1s infinite; }
+
+    @keyframes pulse-blue {
+      0%,100% { box-shadow: 0 0 0 0 rgba(96,200,240,.4); }
+      50%      { box-shadow: 0 0 0 6px rgba(96,200,240,0); }
+    }
+
+    #caption-text { font-size: 13.5px; line-height: 1.55; color: var(--text); }
+
+    /* ── Status bar ─────────────────────────────────── */
+    .status-bar {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    /* ── Right panel ─────────────────────────────────── */
+    .panel-right {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 22px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .chat-title-wrap { flex: 1; }
+
+    .chat-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .chat-subtitle { font-size: 12px; color: var(--text-muted); }
+
+    /* TTS auto-speak toggle in header */
+    .auto-speak-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: border-color .2s, color .2s;
+      flex-shrink: 0;
+    }
+
+    .auto-speak-toggle:hover { border-color: var(--speak-color); color: var(--speak-color); }
+    .auto-speak-toggle.active {
+      border-color: var(--speak-color);
+      color: var(--speak-color);
+      background: rgba(96,200,240,.08);
+    }
+
+    .toggle-dot {
+      width: 20px; height: 12px;
+      background: var(--border);
+      border-radius: 99px;
+      position: relative;
+      transition: background .2s;
+    }
+
+    .toggle-dot::after {
+      content: '';
+      position: absolute;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      top: 2px; left: 2px;
+      transition: transform .2s, background .2s;
+    }
+
+    .auto-speak-toggle.active .toggle-dot { background: rgba(96,200,240,.3); }
+    .auto-speak-toggle.active .toggle-dot::after {
+      transform: translateX(8px);
+      background: var(--speak-color);
+    }
+
+    /* ── Messages area ────────────────────────────────── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      scroll-behavior: smooth;
+    }
+
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Empty state ─────────────────────────────────── */
+    #empty-state {
+      margin: auto;
+      text-align: center;
+      animation: fadeIn 1s ease;
+    }
+
+    @keyframes fadeIn  { from{opacity:0}   to{opacity:1} }
+    @keyframes fadeUp  {
+      from { opacity:0; transform:translateY(12px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    .empty-icon { font-size: 52px; margin-bottom: 16px; }
+
+    .empty-title {
+      font-family: var(--font-display);
+      font-size: 22px; font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .empty-body {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      max-width: 300px;
+      margin: 0 auto;
+    }
+
+    .chip-row {
+      display: flex; flex-wrap: wrap;
+      gap: 8px; justify-content: center;
+      margin-top: 20px;
+    }
+
+    .chip {
+      padding: 7px 14px;
+      border: 1px solid var(--border-light);
+      border-radius: 99px;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      background: var(--surface);
+    }
+
+    /* ── Chat bubbles ─────────────────────────────────── */
+    .msg {
+      display: flex;
+      gap: 12px;
+      animation: fadeUp .3s ease;
+      max-width: 820px;
+    }
+
+    .msg.user      { flex-direction: row-reverse; align-self: flex-end; }
+    .msg.assistant { align-self: flex-start; }
+
+    .avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .msg.user      .avatar { background: var(--user-bubble); }
+    .msg.assistant .avatar { background: var(--ai-bubble); border: 1px solid var(--border); }
+
+    .bubble-wrap { display: flex; flex-direction: column; gap: 6px; max-width: 580px; }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .msg.user      .bubble {
+      background: var(--user-bubble);
+      color: var(--text);
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg.assistant .bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble strong { color: var(--accent); font-weight: 600; }
+
+    /* ── Per-message speak button ─────────────────────── */
+    .msg-speak-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      align-self: flex-start;
+      padding: 3px 10px;
+      background: rgba(96,200,240,.08);
+      border: 1px solid rgba(96,200,240,.2);
+      border-radius: 99px;
+      color: var(--speak-color);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      margin-left: 2px;
+    }
+
+    .msg-speak-btn:hover   { background: rgba(96,200,240,.18); }
+    .msg-speak-btn.playing { border-color: var(--speak-color); animation: pulse-blue 1s infinite; }
+
+    /* ── Typing indicator ─────────────────────────────── */
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 14px 16px;
+    }
+
+    .typing-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: blink 1.2s infinite;
+    }
+
+    .typing-dot:nth-child(2) { animation-delay: .2s; }
+    .typing-dot:nth-child(3) { animation-delay: .4s; }
+
+    @keyframes blink {
+      0%,80%,100% { opacity:.2; transform:scale(1); }
+      40%          { opacity:1;  transform:scale(1.25); }
+    }
+
+    /* ── Input row ─────────────────────────────────────── */
+    .input-row {
+      padding: 18px 32px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-shrink: 0;
+      background: var(--bg);
+    }
+
+    #msg-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 14px;
+      resize: none;
+      min-height: 46px;
+      max-height: 130px;
+      line-height: 1.5;
+      outline: none;
+      transition: border-color .2s;
+      overflow-y: auto;
+    }
+
+    #msg-input:focus        { border-color: var(--accent); }
+    #msg-input::placeholder { color: var(--text-subtle); }
+
+    /* Active mic: red border on input */
+    #msg-input.listening {
+      border-color: var(--mic-color);
+      box-shadow: 0 0 0 3px var(--mic-glow);
+    }
+
+    /* ── Mic button ─────────────────────────────────────── */
+    #mic-btn {
+      width: 46px; height: 46px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, color .15s, border-color .15s;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    #mic-btn:hover {
+      border-color: var(--mic-color);
+      color: var(--mic-color);
+      background: var(--mic-glow);
+    }
+
+    #mic-btn.listening {
+      background: var(--mic-glow);
+      border-color: var(--mic-color);
+      color: var(--mic-color);
+      animation: pulse-red 1s infinite;
+    }
+
+    @keyframes pulse-red {
+      0%,100% { box-shadow: 0 0 0 0 rgba(240,96,96,.5); }
+      50%      { box-shadow: 0 0 0 8px rgba(240,96,96,0); }
+    }
+
+    /* Mic tooltip */
+    #mic-btn::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%; transform: translateX(-50%);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      font-size: 11px;
+      white-space: nowrap;
+      color: var(--text-muted);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+
+    #mic-btn:hover::after { opacity: 1; }
+
+    /* ── Send button ─────────────────────────────────────── */
+    #send-btn {
+      width: 46px; height: 46px;
+      border-radius: var(--radius-md);
+      border: none;
+      background: var(--accent);
+      color: #0d0d0f;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, transform .1s;
+      flex-shrink: 0;
+    }
+
+    #send-btn:hover  { background: #d9f57a; }
+    #send-btn:active { transform: scale(.94); }
+    #send-btn:disabled {
+      background: var(--surface-2);
+      color: var(--text-subtle);
+      cursor: not-allowed;
+    }
+
+    /* ── Voice status bar (above input) ─────────────────── */
+    #voice-status {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 32px;
+      font-size: 12px;
+      color: var(--mic-color);
+      border-top: 1px solid rgba(240,96,96,.2);
+      background: rgba(240,96,96,.05);
+      flex-shrink: 0;
+    }
+
+    #voice-status.visible { display: flex; }
+
+    .voice-wave {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+
+    .voice-bar {
+      width: 3px;
+      background: var(--mic-color);
+      border-radius: 2px;
+      animation: wave 0.8s ease infinite;
+    }
+
+    .voice-bar:nth-child(1) { height: 8px;  animation-delay: 0s; }
+    .voice-bar:nth-child(2) { height: 16px; animation-delay: .1s; }
+    .voice-bar:nth-child(3) { height: 12px; animation-delay: .2s; }
+    .voice-bar:nth-child(4) { height: 20px; animation-delay: .3s; }
+    .voice-bar:nth-child(5) { height: 10px; animation-delay: .4s; }
+
+    @keyframes wave {
+      0%,100% { transform: scaleY(1);   opacity:.6; }
+      50%      { transform: scaleY(.4); opacity:1; }
+    }
+
+    /* ── Error toast ──────────────────────────────────── */
+    #toast {
+      display: none;
+      position: fixed;
+      bottom: 28px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--error);
+      color: #fff;
+      padding: 11px 22px;
+      border-radius: 99px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 100;
+      animation: fadeUp .3s ease;
+      max-width: 480px;
+      text-align: center;
+    }
+
+    /* ── No-support banner ──────────────────────────────── */
+    #no-speech-banner {
+      display: none;
+      background: rgba(240,96,96,.08);
+      border: 1px solid rgba(240,96,96,.25);
+      color: #f09060;
+      font-size: 12px;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      margin: 0 20px 4px;
+      text-align: center;
+    }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 820px) {
+      .shell {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+        overflow: auto;
+      }
+      .panel-left  { max-height: 50vh; }
+      .panel-right { overflow: hidden; }
+      body { overflow: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ══════════════════════════════════════
+       LEFT PANEL
+  ══════════════════════════════════════ -->
+  <aside class="panel-left">
+
+    <div class="panel-header">
+      <div class="logo">
+        <div class="logo-dot"></div>
+        <span class="logo-text">VisionChat</span>
+      </div>
+      <p class="logo-sub">AI Image Analysis — runs locally</p>
+      <div class="feature-badges">
+        <span class="badge badge-tts">🔊 Text-to-Speech</span>
+        <span class="badge badge-stt">🎤 Voice Input</span>
+      </div>
+    </div>
+
+    <div class="drop-zone-wrapper">
+
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept="image/*" />
+        <div id="processing-overlay">
+          <div class="spinner"></div>
+          <p class="processing-text">Analysing image…</p>
+        </div>
+        <span class="drop-icon">🖼️</span>
+        <p class="drop-title">Drop an image or click to browse</p>
+        <p class="drop-hint">PNG, JPG, JPEG, WebP, GIF, BMP · max 16 MB</p>
+        <button class="btn-upload">Choose File</button>
+      </div>
+
+      <div id="preview-card">
+        <img id="preview-img" src="" alt="Uploaded image" />
+        <div class="caption-bar">
+          <div class="caption-label">
+            <span>✦ AI Caption</span>
+            <!-- Speak caption button -->
+            <button class="speak-caption-btn" id="speak-caption-btn" title="Hear the caption">
+              🔊 <span>Hear</span>
+            </button>
+          </div>
+          <p id="caption-text">—</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="no-speech-banner">
+      ⚠️ Your browser doesn't support voice input. Use Chrome or Edge for mic features.
+    </div>
+
+    <div class="status-bar">
+      <div class="status-dot"></div>
+      <span id="status-text">Ready — upload an image to begin</span>
+    </div>
+
+  </aside>
+
+  <!-- ══════════════════════════════════════
+       RIGHT PANEL — chat
+  ══════════════════════════════════════ -->
+  <main class="panel-right">
+
+    <div class="chat-header">
+      <div class="chat-title-wrap">
+        <h1 class="chat-title">Ask about your image</h1>
+        <p class="chat-subtitle"></p>
+      </div>
+
+      <!-- Auto-speak toggle -->
+      <button class="auto-speak-toggle" id="auto-speak-toggle" title="Automatically read AI replies aloud">
+        <span class="toggle-dot"></span>
+        <span>Auto-speak</span>
+      </button>
+    </div>
+
+    <div id="messages">
+      <div id="empty-state">
+        <div class="empty-icon">🔍</div>
+        <p class="empty-title">No image yet</p>
+        <p class="empty-body">
+          Upload an image on the left, then type <em>or speak</em> your questions.
+          AI replies can be read aloud automatically.
+        </p>
+        <div class="chip-row">
+          <span class="chip">🎤 Click mic to speak</span>
+          <span class="chip">🔊 Hear AI answers</span>
+          <span class="chip">What color is…?</span>
+          <span class="chip">How many… are there?</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Voice activity status -->
+    <div id="voice-status">
+      <div class="voice-wave">
+        <div class="voice-bar"></div>
+        <div class="voice-bar"></div>
+        <div class="voice-bar"></div>
+        <div class="voice-bar"></div>
+        <div class="voice-bar"></div>
+      </div>
+      <span id="voice-status-text">Listening… speak your question</span>
+    </div>
+
+    <div class="input-row">
+      <textarea
+        id="msg-input"
+        placeholder="Type or 🎤 speak your question about the image…"
+        rows="1"
+        disabled
+      ></textarea>
+
+      <!-- Microphone button -->
+      <button id="mic-btn" title="Voice input" data-tip="Hold to speak" disabled>🎤</button>
+
+      <!-- Send button -->
+      <button id="send-btn" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════ -->
+<script>
+/* ─────────────────────────────────────────────────────────
+   STATE
+───────────────────────────────────────────────────────── */
+let sessionId      = null;
+let isBusy         = false;
+let autoSpeak      = false;   // auto-read AI replies
+let currentCaption = '';      // stored caption for TTS
+
+// TTS: currently speaking utterance
+let currentUtterance = null;
+
+// STT: recognition object
+let recognition      = null;
+let isListening      = false;
+
+/* ─────────────────────────────────────────────────────────
+   DOM REFS
+───────────────────────────────────────────────────────── */
+const dropZone          = document.getElementById('drop-zone');
+const fileInput         = document.getElementById('file-input');
+const processingOverlay = document.getElementById('processing-overlay');
+const previewCard       = document.getElementById('preview-card');
+const previewImg        = document.getElementById('preview-img');
+const captionText       = document.getElementById('caption-text');
+const speakCaptionBtn   = document.getElementById('speak-caption-btn');
+const statusText        = document.getElementById('status-text');
+const messages          = document.getElementById('messages');
+const emptyState        = document.getElementById('empty-state');
+const msgInput          = document.getElementById('msg-input');
+const micBtn            = document.getElementById('mic-btn');
+const sendBtn           = document.getElementById('send-btn');
+const toast             = document.getElementById('toast');
+const autoSpeakToggle   = document.getElementById('auto-speak-toggle');
+const voiceStatus       = document.getElementById('voice-status');
+const voiceStatusText   = document.getElementById('voice-status-text');
+const noSpeechBanner    = document.getElementById('no-speech-banner');
+
+/* ─────────────────────────────────────────────────────────
+   UTILITIES
+───────────────────────────────────────────────────────── */
+function renderText(txt) {
+  // **bold** → <strong>
+  return txt.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
+function stripMarkdown(txt) {
+  // Plain text for TTS (no markdown symbols)
+  return txt.replace(/\*\*(.+?)\*\*/g, '$1').replace(/[*_`#]/g, '');
+}
+
+function showToast(msg, duration = 4500) {
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => { toast.style.display = 'none'; }, duration);
+}
+
+function autoResize() {
+  msgInput.style.height = 'auto';
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 130) + 'px';
+}
+
+/* ─────────────────────────────────────────────────────────
+   TEXT-TO-SPEECH (Web Speech API — SpeechSynthesis)
+───────────────────────────────────────────────────────── */
+const ttsSupported = 'speechSynthesis' in window;
+
+/**
+ * Speak *text* aloud.
+ * @param {string}   text      — what to say
+ * @param {Function} onEnd     — optional callback when done
+ * @param {HTMLElement} btn    — optional button to toggle .playing class
+ */
+function speak(text, onEnd, btn) {
+  if (!ttsSupported) {
+    showToast('⚠️ Text-to-speech is not supported in your browser.');
+    return;
+  }
+
+  // Stop anything currently playing
+  stopSpeaking();
+
+  const clean = stripMarkdown(text).trim();
+  if (!clean) return;
+
+  const utterance    = new SpeechSynthesisUtterance(clean);
+  utterance.lang     = 'en-US';
+  utterance.rate     = 0.95;   // slightly slower = more natural
+  utterance.pitch    = 1.0;
+  utterance.volume   = 1.0;
+
+  if (btn) {
+    btn.classList.add('playing');
+    utterance.onend  = () => { btn.classList.remove('playing'); if (onEnd) onEnd(); };
+    utterance.onerror = () => btn.classList.remove('playing');
+  } else {
+    utterance.onend = onEnd || null;
+  }
+
+  currentUtterance = utterance;
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopSpeaking() {
+  if (ttsSupported && window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   SPEECH-TO-TEXT (Web Speech API — SpeechRecognition)
+───────────────────────────────────────────────────────── */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const sttSupported      = !!SpeechRecognition;
+
+if (!sttSupported) {
+  noSpeechBanner.style.display = 'block';
+}
+
+function initRecognition() {
+  if (!sttSupported) return;
+
+  recognition           = new SpeechRecognition();
+  recognition.lang      = 'en-US';
+  recognition.interimResults = true;   // show partial results in input
+  recognition.continuous     = false;
+  recognition.maxAlternatives = 1;
+
+  // While speaking — show interim transcript in the input box
+  recognition.onresult = (e) => {
+    let interim = '';
+    let final   = '';
+
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        final += e.results[i][0].transcript;
+      } else {
+        interim += e.results[i][0].transcript;
+      }
+    }
+
+    msgInput.value = final || interim;
+    autoResize();
+  };
+
+  recognition.onend = () => {
+    stopListening();
+    // Auto-send if there's content and session is active
+    const txt = msgInput.value.trim();
+    if (txt && sessionId) {
+      setTimeout(sendMessage, 300);   // small delay feels more natural
+    }
+  };
+
+  recognition.onerror = (e) => {
+    stopListening();
+    if (e.error === 'not-allowed') {
+      showToast('❌ Microphone access denied. Please allow mic access in your browser.');
+    } else if (e.error !== 'aborted') {
+      showToast(`⚠️ Voice error: ${e.error}`);
+    }
+  };
+}
+
+function startListening() {
+  if (!sttSupported || isListening || !sessionId) return;
+
+  // Pause any TTS while user speaks
+  stopSpeaking();
+
+  isListening = true;
+  msgInput.value = '';
+  msgInput.classList.add('listening');
+  micBtn.classList.add('listening');
+  micBtn.title = 'Listening… click to stop';
+  voiceStatus.classList.add('visible');
+  voiceStatusText.textContent = 'Listening… speak your question';
+
+  initRecognition();
+  recognition.start();
+}
+
+function stopListening() {
+  isListening = false;
+  msgInput.classList.remove('listening');
+  micBtn.classList.remove('listening');
+  micBtn.title = 'Voice input';
+  micBtn.dataset.tip = 'Click to speak';
+  voiceStatus.classList.remove('visible');
+
+  if (recognition) {
+    try { recognition.stop(); } catch (_) {}
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   CHAT UI HELPERS
+───────────────────────────────────────────────────────── */
+function appendMessage(role, content) {
+  const wrap   = document.createElement('div');
+  wrap.className = `msg ${role}`;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = role === 'user' ? '🧑' : '🤖';
+
+  const bubbleWrap = document.createElement('div');
+  bubbleWrap.className = 'bubble-wrap';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML  = renderText(content);
+  bubbleWrap.appendChild(bubble);
+
+  // Add 🔊 speak button for AI messages
+  if (role === 'assistant') {
+    const speakBtn = document.createElement('button');
+    speakBtn.className = 'msg-speak-btn';
+    speakBtn.innerHTML = '🔊 Hear reply';
+    speakBtn.title     = 'Read this message aloud';
+
+    speakBtn.addEventListener('click', () => {
+      if (speakBtn.classList.contains('playing')) {
+        stopSpeaking();
+        speakBtn.classList.remove('playing');
+      } else {
+        speak(content, null, speakBtn);
+      }
+    });
+
+    bubbleWrap.appendChild(speakBtn);
+
+    // Auto-speak if toggle is on
+    if (autoSpeak) {
+      setTimeout(() => speak(content), 300);
+    }
+  }
+
+  wrap.appendChild(avatar);
+  wrap.appendChild(bubbleWrap);
+  messages.appendChild(wrap);
+  messages.scrollTop = messages.scrollHeight;
+  return wrap;
+}
+
+function showTyping() {
+  const wrap   = document.createElement('div');
+  wrap.className = 'msg assistant';
+  wrap.id = 'typing-indicator';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = '🤖';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble typing-indicator';
+  bubble.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+
+  wrap.appendChild(avatar);
+  wrap.appendChild(bubble);
+  messages.appendChild(wrap);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function hideTyping() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+/* ─────────────────────────────────────────────────────────
+   IMAGE UPLOAD
+───────────────────────────────────────────────────────── */
+async function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    showToast('⚠️ Please select a valid image file.');
+    return;
+  }
+  if (file.size > 16 * 1024 * 1024) {
+    showToast('⚠️ File too large — max 16 MB.');
+    return;
+  }
+
+  stopSpeaking();
+
+  isBusy = true;
+  processingOverlay.style.display = 'flex';
+  statusText.textContent = 'Analysing image…';
+  msgInput.disabled = true;
+  sendBtn.disabled  = true;
+  micBtn.disabled   = true;
+
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const res  = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+    sessionId      = data.session_id;
+    currentCaption = data.caption;
+
+    previewImg.src          = data.image_data;
+    previewCard.style.display = 'block';
+    captionText.textContent = data.caption;
+    dropZone.querySelector('.drop-icon').textContent = '✅';
+
+    // Clear chat + add welcome message
+    if (emptyState) emptyState.remove();
+    messages.innerHTML = '';
+    appendMessage('assistant', data.welcome_message);
+
+    // Enable chat + mic
+    msgInput.disabled = false;
+    sendBtn.disabled  = false;
+    if (sttSupported) micBtn.disabled = false;
+    msgInput.focus();
+
+    statusText.textContent = 'Ready — type or 🎤 speak your question';
+  } catch (err) {
+    showToast('❌ ' + err.message);
+    statusText.textContent = 'Upload failed — try again';
+  } finally {
+    processingOverlay.style.display = 'none';
+    isBusy = false;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   SEND MESSAGE
+───────────────────────────────────────────────────────── */
+async function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text || isBusy || !sessionId) return;
+  if (text.length > 500) { showToast('Message too long (max 500 characters).'); return; }
+
+  stopSpeaking();
+  msgInput.value = '';
+  autoResize();
+
+  isBusy = true;
+  sendBtn.disabled  = true;
+  msgInput.disabled = true;
+  micBtn.disabled   = true;
+
+  appendMessage('user', text);
+  showTyping();
+
+  try {
+    const res  = await fetch('/chat', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ session_id: sessionId, message: text }),
+    });
+    const data = await res.json();
+    hideTyping();
+
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+
+    appendMessage('assistant', data.response);
+  } catch (err) {
+    hideTyping();
+    appendMessage('assistant', '⚠️ Sorry, something went wrong: ' + err.message);
+  } finally {
+    isBusy = false;
+    sendBtn.disabled  = false;
+    msgInput.disabled = false;
+    if (sttSupported && sessionId) micBtn.disabled = false;
+    msgInput.focus();
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   EVENT LISTENERS
+───────────────────────────────────────────────────────── */
+
+// File input
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+// Drag & drop
+dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+// Send button
+sendBtn.addEventListener('click', sendMessage);
+
+// Enter to send (Shift+Enter = newline)
+msgInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// Auto-resize textarea
+msgInput.addEventListener('input', autoResize);
+
+// ── Mic button — click to toggle listening ──
+micBtn.addEventListener('click', () => {
+  if (!sttSupported) {
+    showToast('⚠️ Voice input requires Chrome or Edge browser.');
+    return;
+  }
+  if (!sessionId) {
+    showToast('⚠️ Upload an image first before using voice input.');
+    return;
+  }
+  if (isListening) {
+    stopListening();
+  } else {
+    startListening();
+  }
+});
+
+// ── Auto-speak toggle ──
+autoSpeakToggle.addEventListener('click', () => {
+  autoSpeak = !autoSpeak;
+  autoSpeakToggle.classList.toggle('active', autoSpeak);
+
+  if (!autoSpeak) stopSpeaking();
+  showToast(autoSpeak
+    ? '🔊 Auto-speak ON — AI replies will be read aloud'
+    : '🔇 Auto-speak OFF'
+  );
+});
+
+// ── Speak-caption button ──
+speakCaptionBtn.addEventListener('click', (e) => {
+  e.stopPropagation();   // don't trigger the file input
+  if (speakCaptionBtn.classList.contains('speaking')) {
+    stopSpeaking();
+    speakCaptionBtn.classList.remove('speaking');
+  } else {
+    speakCaptionBtn.classList.add('speaking');
+    speak(currentCaption, () => speakCaptionBtn.classList.remove('speaking'));
+  }
+});
+
+// Stop TTS when page is hidden (tab switch)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopSpeaking();
+});
+</script>
+</body>
+</html>
